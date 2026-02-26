@@ -321,6 +321,7 @@ class Report:
         show_logs: bool = False,
         max_workers: int | None = 1,
         checkout: Literal["merge", "commit"] = "merge",
+        cross_pkg_set: str | None = None,
     ) -> None:
         self.commit = commit
         self.show_header = show_header
@@ -333,6 +334,8 @@ class Report:
         self.package_regex = [r.pattern for r in package_regex]
         self.skip_packages = skip_packages
         self.skip_packages_regex = [r.pattern for r in skip_packages_regex]
+
+        self.cross_pkg_set = cross_pkg_set
 
         self.extra_nixpkgs_config = (
             extra_nixpkgs_config if extra_nixpkgs_config != "{ }" else None
@@ -367,6 +370,7 @@ class Report:
                 "commit": self.commit,
                 "checkout": self.checkout,
                 "extra-nixpkgs-config": self.extra_nixpkgs_config,
+                "cross-pkg-set": self.cross_pkg_set,
                 "only_packages": list(self.only_packages),
                 "additional_packages": list(self.additional_packages),
                 "package_regex": list(self.package_regex),
@@ -385,6 +389,8 @@ class Report:
         cmd = "nixpkgs-review"
         if pr is not None:
             cmd += f" pr {pr}"
+        if self.cross_pkg_set:
+            cmd += f" --pkgs={self.cross_pkg_set}"
         if self.extra_nixpkgs_config:
             cmd += f" --extra-nixpkgs-config '{self.extra_nixpkgs_config}'"
         if self.checkout != "merge":

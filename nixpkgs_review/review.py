@@ -119,6 +119,7 @@ class Review:
         skip_packages: set[str] | None = None,
         skip_packages_regex: list[Pattern[str]] | None = None,
         checkout: CheckoutOption = CheckoutOption.MERGE,
+        cross_pkg_set: str | None = None,
         *,
         sandbox: bool = False,
         num_parallel_evals: int = 1,
@@ -159,6 +160,7 @@ class Review:
         self.show_header = show_header
         self.show_logs = show_logs
         self.show_pr_info = show_pr_info
+        self.cross_pkg_set = cross_pkg_set
         self.head_commit: str | None = None
         self.pr_object = pr_object
 
@@ -489,6 +491,7 @@ class Review:
             self.builddir.nix_path,
             self.nixpkgs_config,
             self.num_parallel_evals,
+            cross_pkg_set=self.cross_pkg_set,
         )
 
     def _fetch_packages_from_github_eval(
@@ -597,6 +600,7 @@ class Review:
             # we don't use self.num_parallel_evals here since its choice
             # is mainly capped by available RAM
             max_workers=min(32, os.cpu_count() or 1),  # 'None' assumes IO tasks
+            cross_pkg_set=self.cross_pkg_set,
         )
         report.print_console(path, pr)
         report.write(path, pr)
@@ -626,6 +630,7 @@ class Review:
                 self.nixpkgs_config,
                 self.builddir.overlay.path,
                 self.run,
+                cross_pkg_set=self.cross_pkg_set,
                 sandbox=self.sandbox,
             )
 
@@ -1014,6 +1019,7 @@ def review_local_revision(
             nixpkgs_config=nixpkgs_config,
             extra_nixpkgs_config=args.extra_nixpkgs_config,
             num_parallel_evals=args.num_parallel_evals,
+            cross_pkg_set=args.pkgs,
         )
         review.review_commit(
             builddir.path, args.branch, commit, staged=staged, print_result=print_result

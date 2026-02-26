@@ -122,6 +122,7 @@ def pr_command(args: argparse.Namespace) -> str:
                     nixpkgs_config=nixpkgs_config,
                     extra_nixpkgs_config=args.extra_nixpkgs_config,
                     num_parallel_evals=args.num_parallel_evals,
+                    cross_pkg_set=args.pkgs,
                     show_header=not args.no_headers,
                     show_logs=not args.no_logs,
                     show_pr_info=not args.no_pr_info,

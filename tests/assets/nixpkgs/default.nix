@@ -36,14 +36,32 @@ let
       ln -s $paths $out
     '';
   };
+
+  generatedPkgs = lib.genAttrs' (lib.range 1 (config.pkgCount or 1)) (
+    i:
+    lib.nameValuePair "pkg${toString i}" (mkDerivation {
+      name = "pkg${toString i}";
+      buildCommand = ''
+        cat ${./pkg1.txt} > $out
+      '';
+    }));
+
+  commonAttrs = {
+    inherit lib mkShell bashInteractive stdenv buildEnv;
+  };
+
+  topLevel = generatedPkgs // commonAttrs;
+
+  # Cross-compilation and alternative package sets for testing.
+  # These mirror the top-level packages so that attribute resolution
+  # through --pkgs works end-to-end in tests.
+  crossAttrs = {
+    pkgsCross = {
+      aarch64-multiplatform = topLevel;
+      riscv64 = topLevel;
+    };
+    pkgsMusl = topLevel;
+    pkgsStatic = topLevel;
+  };
 in
-lib.genAttrs' (lib.range 1 (config.pkgCount or 1)) (
-  i:
-  lib.nameValuePair "pkg${toString i}" (mkDerivation {
-    name = "pkg${toString i}";
-    buildCommand = ''
-      cat ${./pkg1.txt} > $out
-    '';
-  })) // {
-  inherit lib mkShell bashInteractive stdenv buildEnv;
-}
+topLevel // crossAttrs

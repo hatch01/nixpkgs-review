@@ -13,6 +13,8 @@ if TYPE_CHECKING:
     from .conftest import Helpers
 
 
+
+
 @pytest.mark.skipif(not shutil.which("nom"), reason="`nom` not found in PATH")
 def test_rev_command(helpers: Helpers) -> None:
     with helpers.nixpkgs() as nixpkgs:
@@ -69,6 +71,101 @@ def test_rev_only_packages_does_not_trigger_an_eval(
                 "exit 0",
                 "--build-graph",
                 "nix",
+                "--package",
+                "pkg1",
+            ],
+        )
+        helpers.assert_built(path, "pkg1")
+
+
+def test_rev_command_with_cross_compile(helpers: Helpers) -> None:
+    with helpers.nixpkgs() as nixpkgs:
+        nixpkgs.path.joinpath("pkg1.txt").write_text("foo")
+        subprocess.run(["git", "add", "."], check=True)
+        subprocess.run(["git", "commit", "-m", "example-change"], check=True)
+        path = main(
+            "nixpkgs-review",
+            [
+                "rev",
+                "HEAD",
+                "--remote",
+                str(nixpkgs.remote),
+                "--run",
+                "exit 0",
+                "--build-graph",
+                "nix",
+                "--pkgs",
+                "pkgsCross.aarch64-multiplatform",
+            ],
+        )
+        helpers.assert_built(path, "pkg1")
+
+
+def test_rev_command_with_pkgs_musl(helpers: Helpers) -> None:
+    with helpers.nixpkgs() as nixpkgs:
+        nixpkgs.path.joinpath("pkg1.txt").write_text("foo")
+        subprocess.run(["git", "add", "."], check=True)
+        subprocess.run(["git", "commit", "-m", "example-change"], check=True)
+        path = main(
+            "nixpkgs-review",
+            [
+                "rev",
+                "HEAD",
+                "--remote",
+                str(nixpkgs.remote),
+                "--run",
+                "exit 0",
+                "--build-graph",
+                "nix",
+                "--pkgs",
+                "pkgsMusl",
+            ],
+        )
+        helpers.assert_built(path, "pkg1")
+
+
+def test_rev_command_with_pkgs_static(helpers: Helpers) -> None:
+    with helpers.nixpkgs() as nixpkgs:
+        nixpkgs.path.joinpath("pkg1.txt").write_text("foo")
+        subprocess.run(["git", "add", "."], check=True)
+        subprocess.run(["git", "commit", "-m", "example-change"], check=True)
+        path = main(
+            "nixpkgs-review",
+            [
+                "rev",
+                "HEAD",
+                "--remote",
+                str(nixpkgs.remote),
+                "--run",
+                "exit 0",
+                "--build-graph",
+                "nix",
+                "--pkgs",
+                "pkgsStatic",
+            ],
+        )
+        helpers.assert_built(path, "pkg1")
+
+
+def test_rev_command_cross_compile_with_package_flag(helpers: Helpers) -> None:
+    """Test that --pkgs works together with -p to select specific packages."""
+    with helpers.nixpkgs() as nixpkgs:
+        nixpkgs.path.joinpath("pkg1.txt").write_text("foo")
+        subprocess.run(["git", "add", "."], check=True)
+        subprocess.run(["git", "commit", "-m", "example-change"], check=True)
+        path = main(
+            "nixpkgs-review",
+            [
+                "rev",
+                "HEAD",
+                "--remote",
+                str(nixpkgs.remote),
+                "--run",
+                "exit 0",
+                "--build-graph",
+                "nix",
+                "--pkgs",
+                "pkgsCross.aarch64-multiplatform",
                 "--package",
                 "pkg1",
             ],

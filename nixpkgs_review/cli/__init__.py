@@ -309,6 +309,12 @@ def common_flags() -> list[CommonFlag]:
             default=1,
             help="Number of parallel `nix-env`/`nix eval` processes to run simultaneously (warning, can imply heavy RAM usage)",
         ),
+        CommonFlag(
+            "--pkgs",
+            type=str,
+            default=None,
+            help="Which pkgs set to use for cross-compilation or alternative package sets, e.g. pkgsCross.aarch64-multiplatform, pkgsMusl, or pkgsStatic",
+        ),
     ]
 
 

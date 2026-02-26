@@ -1,14 +1,20 @@
-{ attr-json }:
+{ attr-json, cross-pkg-set ? null }:
 
 with builtins;
 let
-  pkgs = import <nixpkgs> {
+  basePkgs = import <nixpkgs> {
     config = import (getEnv "NIXPKGS_CONFIG") // {
       allowBroken = false;
     };
   };
 
-  inherit (pkgs) lib;
+  inherit (basePkgs) lib;
+
+  pkgs =
+    if cross-pkg-set != null then
+      lib.attrByPath (lib.splitString "." cross-pkg-set) basePkgs basePkgs
+    else
+      basePkgs;
 
   attrs = fromJSON (readFile attr-json);
   getProperties =
