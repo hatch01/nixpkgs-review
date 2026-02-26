@@ -1,14 +1,23 @@
-{ attr-json }:
+{
+  attr-json,
+  pkgs-path ? null,
+}:
 
 with builtins;
 let
-  pkgs = import <nixpkgs> {
+  basePkgs = import <nixpkgs> {
     config = import (getEnv "NIXPKGS_CONFIG") // {
       allowBroken = false;
     };
   };
 
-  inherit (pkgs) lib;
+  inherit (basePkgs) lib;
+
+  pkgs =
+    if pkgs-path != null then
+      lib.attrByPath (lib.splitString "." pkgs-path) basePkgs basePkgs
+    else
+      basePkgs;
 
   attrs = fromJSON (readFile attr-json);
   getProperties =

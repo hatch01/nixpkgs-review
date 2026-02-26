@@ -261,6 +261,7 @@ def nix_eval(
     system: str,
     allow: AllowedFeatures,
     nix_path: str,
+    pkgs_path: str | None = None,
 ) -> list[Attr]:
     attr_json = NamedTemporaryFile(mode="w+", delete=False)  # noqa: SIM115
     delete = True
@@ -268,6 +269,7 @@ def nix_eval(
         json.dump(list(attrs), attr_json)
         eval_script = str(ROOT.joinpath("nix/evalAttrs.nix"))
         attr_json.flush()
+        pkgs_path_arg = f' pkgs-path = "{pkgs_path}";' if pkgs_path else ""
         cmd = [
             "nix",
             *_nix_common_flags(allow, nix_path),
@@ -277,7 +279,7 @@ def nix_eval(
             "--json",
             "--impure",
             "--expr",
-            f"(import {eval_script} {{ attr-json = {attr_json.name}; }})",
+            f"(import {eval_script} {{ attr-json = {attr_json.name};{pkgs_path_arg} }})",
         ]
 
         nix_eval = subprocess.run(cmd, stdout=subprocess.PIPE, text=True, check=False)
@@ -304,6 +306,8 @@ def multi_system_eval(
     allow: AllowedFeatures,
     nix_path: str,
     n_threads: int,
+    pkgs_path: str | None = None,
+    local_system: System | None = None,
 ) -> dict[System, list[Attr]]:
     results: dict[System, list[Attr]] = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=n_threads) as executor:
@@ -311,9 +315,13 @@ def multi_system_eval(
             executor.submit(
                 nix_eval,
                 attrs=attrs,
-                system=system,
+                # When cross-compiling, evaluate on the build (local) system so that
+                # import <nixpkgs> resolves for the host machine and pkgs-path can
+                # navigate to the cross package set correctly.
+                system=local_system if pkgs_path and local_system else system,
                 allow=allow,
                 nix_path=nix_path,
+                pkgs_path=pkgs_path,
             ): system
             for system, attrs in attr_names_per_system.items()
         }
@@ -334,6 +342,7 @@ def nix_build(
     nix_path: str,
     nixpkgs_config: Path,
     n_threads: int,
+    pkgs_path: str | None = None,
 ) -> dict[System, list[Attr]]:
     if not attr_names_per_system:
         info("Nothing to be built.")
@@ -344,6 +353,8 @@ def nix_build(
         allow,
         nix_path,
         n_threads=n_threads,
+        pkgs_path=pkgs_path,
+        local_system=local_system,
     )
 
     filtered_per_system = {
@@ -377,6 +388,7 @@ def nix_build(
         attrs_per_system=filtered_per_system,
         local_system=local_system,
         nixpkgs_config=nixpkgs_config,
+        pkgs_path=pkgs_path,
     )
     _write_review_shell_drv(
         cache_directory=cache_directory,
@@ -396,6 +408,7 @@ def build_shell_file_args(
     attrs_per_system: dict[System, list[str]],
     local_system: str,
     nixpkgs_config: Path,
+    pkgs_path: str | None = None,
 ) -> list[str]:
     attrs_file = cache_dir.joinpath("attrs.nix")
     with attrs_file.open("w+") as f:
@@ -407,7 +420,7 @@ def build_shell_file_args(
             f.write("  ];\n")
         f.write("}")
 
-    return [
+    args = [
         "--argstr",
         "local-system",
         local_system,
@@ -421,6 +434,9 @@ def build_shell_file_args(
         "attrs-path",
         str(attrs_file),
     ]
+    if pkgs_path:
+        args += ["--argstr", "pkgs-path", pkgs_path]
+    return args
 
 
 def _write_review_shell_drv(

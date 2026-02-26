@@ -120,6 +120,7 @@ class Review:
         skip_packages_regex: list[Pattern[str]] | None = None,
         checkout: CheckoutOption = CheckoutOption.MERGE,
         *,
+        pkgs_path: str | None = None,
         sandbox: bool = False,
         num_parallel_evals: int = 1,
         show_header: bool = True,
@@ -152,6 +153,7 @@ class Review:
         )
         self.allow = allow
         self.sandbox = sandbox
+        self.pkgs_path = pkgs_path
         self.build_graph = build_graph
         self.nixpkgs_config = nixpkgs_config
         self.extra_nixpkgs_config = extra_nixpkgs_config
@@ -489,6 +491,7 @@ class Review:
             self.builddir.nix_path,
             self.nixpkgs_config,
             self.num_parallel_evals,
+            self.pkgs_path,
         )
 
     def _fetch_packages_from_github_eval(
@@ -1014,6 +1017,7 @@ def review_local_revision(
             nixpkgs_config=nixpkgs_config,
             extra_nixpkgs_config=args.extra_nixpkgs_config,
             num_parallel_evals=args.num_parallel_evals,
+            pkgs_path=getattr(args, "pkgs", None),
         )
         review.review_commit(
             builddir.path, args.branch, commit, staged=staged, print_result=print_result

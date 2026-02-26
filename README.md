@@ -267,6 +267,35 @@ As an alternative, one can also specify remote builder as usual in
 `/etc/nix/machines` or via the `nix.buildMachines` nixos options in
 `configuration.nix`. This allows to parallelize builds across multiple machines.
 
+## Cross-compilation and alternative package sets
+
+The `--pkgs` flag selects an alternative package set for evaluation and
+building. This is useful for cross-compilation or building with musl/static
+variants.
+
+Cross-compile for aarch64:
+
+```console
+$ nixpkgs-review pr --pkgs=pkgsCross.aarch64-multiplatform 37244
+```
+
+Build with musl:
+
+```console
+$ nixpkgs-review pr --pkgs=pkgsMusl 37244
+```
+
+Build statically:
+
+```console
+$ nixpkgs-review pr --pkgs=pkgsStatic 37244
+```
+
+Keep in mind that not every package supports cross-compilation or can be
+compiled with musl or statically. See
+[Only building a subset of packages](#only-building-a-subset-of-packages) for
+how to limit which packages are built.
+
 ## GitHub API token
 
 **Nixpkgs-review** requires a GitHub token to use cached evaluation results from

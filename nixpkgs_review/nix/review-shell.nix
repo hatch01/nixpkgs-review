@@ -6,6 +6,8 @@
   # Path to Nix file containing a list of attributes to build
   nixpkgs-path,
   # Path to this review's nixpkgs
+  pkgs-path ? null,
+  # Optional dotted attribute path into the package set (e.g. "pkgsCross.aarch64-multiplatform")
   local-pkgs ? import nixpkgs-path {
     system = local-system;
     config = import nixpkgs-config-path;
@@ -19,10 +21,14 @@ let
   extractPackagesForSystem =
     system: system-attrs:
     let
-      system-pkg = import nixpkgs-path {
-        inherit system;
-        config = nixpkgs-config;
-      };
+      system-pkg =
+        if pkgs-path != null then
+          lib.attrByPath (lib.splitString "." pkgs-path) local-pkgs local-pkgs
+        else
+          import nixpkgs-path {
+            inherit system;
+            config = nixpkgs-config;
+          };
     in
     map (attrString: lib.attrByPath (lib.splitString "." attrString) null system-pkg) system-attrs;
   attrs = lib.flatten (lib.mapAttrsToList extractPackagesForSystem (import attrs-path));
