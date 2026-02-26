@@ -261,7 +261,7 @@ def nix_eval(
     system: str,
     allow: AllowedFeatures,
     nix_path: str,
-    pkgs_path: str | None = None,
+    cross_pkg_set: str | None = None,
 ) -> list[Attr]:
     attr_json = NamedTemporaryFile(mode="w+", delete=False)  # noqa: SIM115
     delete = True
@@ -269,7 +269,7 @@ def nix_eval(
         json.dump(list(attrs), attr_json)
         eval_script = str(ROOT.joinpath("nix/evalAttrs.nix"))
         attr_json.flush()
-        pkgs_path_arg = f' pkgs-path = "{pkgs_path}";' if pkgs_path else ""
+        pkgs_path_arg = f' pkgs-path = "{cross_pkg_set}";' if cross_pkg_set else ""
         cmd = [
             "nix",
             *_nix_common_flags(allow, nix_path),
@@ -306,7 +306,7 @@ def multi_system_eval(
     allow: AllowedFeatures,
     nix_path: str,
     n_threads: int,
-    pkgs_path: str | None = None,
+    cross_pkg_set: str | None = None,
     local_system: System | None = None,
 ) -> dict[System, list[Attr]]:
     results: dict[System, list[Attr]] = {}
@@ -318,10 +318,10 @@ def multi_system_eval(
                 # When cross-compiling, evaluate on the build (local) system so that
                 # import <nixpkgs> resolves for the host machine and pkgs-path can
                 # navigate to the cross package set correctly.
-                system=local_system if pkgs_path and local_system else system,
+                system=local_system if cross_pkg_set and local_system else system,
                 allow=allow,
                 nix_path=nix_path,
-                pkgs_path=pkgs_path,
+                cross_pkg_set=cross_pkg_set,
             ): system
             for system, attrs in attr_names_per_system.items()
         }
@@ -342,7 +342,7 @@ def nix_build(
     nix_path: str,
     nixpkgs_config: Path,
     n_threads: int,
-    pkgs_path: str | None = None,
+    cross_pkg_set: str | None = None,
 ) -> dict[System, list[Attr]]:
     if not attr_names_per_system:
         info("Nothing to be built.")
@@ -353,7 +353,7 @@ def nix_build(
         allow,
         nix_path,
         n_threads=n_threads,
-        pkgs_path=pkgs_path,
+        cross_pkg_set=cross_pkg_set,
         local_system=local_system,
     )
 
