@@ -388,7 +388,7 @@ def nix_build(
         attrs_per_system=filtered_per_system,
         local_system=local_system,
         nixpkgs_config=nixpkgs_config,
-        pkgs_path=pkgs_path,
+        cross_pkg_set=cross_pkg_set,
     )
     _write_review_shell_drv(
         cache_directory=cache_directory,
@@ -408,7 +408,7 @@ def build_shell_file_args(
     attrs_per_system: dict[System, list[str]],
     local_system: str,
     nixpkgs_config: Path,
-    pkgs_path: str | None = None,
+    cross_pkg_set: str | None = None,
 ) -> list[str]:
     attrs_file = cache_dir.joinpath("attrs.nix")
     with attrs_file.open("w+") as f:
@@ -434,8 +434,8 @@ def build_shell_file_args(
         "attrs-path",
         str(attrs_file),
     ]
-    if pkgs_path:
-        args += ["--argstr", "pkgs-path", pkgs_path]
+    if cross_pkg_set:
+        args += ["--argstr", "pkgs-path", cross_pkg_set]
     return args
 
 

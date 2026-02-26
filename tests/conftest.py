@@ -238,6 +238,11 @@ sandbox-build-dir = {test_nix_dir.joinpath("build")}
             # Disable sandbox for tests (for macOS compatibility)
             os.environ["_NIX_TEST_NO_SANDBOX"] = "1"
 
+            # Disable git commit signing so tests work even when the user has
+            # commit.gpgsign / tag.gpgsign enabled globally and no agent is running.
+            os.environ["GIT_CONFIG_NOSYSTEM"] = "1"
+            os.environ["GIT_CONFIG_GLOBAL"] = "/dev/null"
+
             # Disable Nix daemon for isolated environment
             if "NIX_REMOTE" in os.environ:
                 del os.environ["NIX_REMOTE"]

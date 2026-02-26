@@ -1,4 +1,4 @@
-"""Tests for the --pkgs / pkgs_path cross-compilation feature.
+"""Tests for the --pkgs / cross_pkg_set cross-compilation feature.
 
 Unit tests (no Nix invocation needed) cover:
 - CLI flag parsing
@@ -81,7 +81,7 @@ def test_pkgs_flag_parsed_for_pr(pkgs_value: str) -> None:
 
 
 def test_build_shell_file_args_without_pkgs_path() -> None:
-    """When pkgs_path is None, no pkgs-path argument should be emitted."""
+    """When cross_pkg_set is None, no pkgs-path argument should be emitted."""
     with tempfile.TemporaryDirectory() as tmpdir:
         Path(tmpdir).joinpath("nixpkgs").mkdir()
         args = build_shell_file_args(
@@ -89,13 +89,13 @@ def test_build_shell_file_args_without_pkgs_path() -> None:
             attrs_per_system={"x86_64-linux": ["hello"]},
             local_system="x86_64-linux",
             nixpkgs_config=Path(tmpdir) / "config.nix",
-            pkgs_path=None,
+            cross_pkg_set=None,
         )
     assert "pkgs-path" not in args
 
 
 def test_build_shell_file_args_with_pkgs_path() -> None:
-    """When pkgs_path is set, --argstr pkgs-path <value> must be present."""
+    """When cross_pkg_set is set, --argstr pkgs-path <value> must be present."""
     with tempfile.TemporaryDirectory() as tmpdir:
         Path(tmpdir).joinpath("nixpkgs").mkdir()
         args = build_shell_file_args(
@@ -103,7 +103,7 @@ def test_build_shell_file_args_with_pkgs_path() -> None:
             attrs_per_system={"x86_64-linux": ["hello"]},
             local_system="x86_64-linux",
             nixpkgs_config=Path(tmpdir) / "config.nix",
-            pkgs_path="pkgsCross.aarch64-multiplatform",
+            cross_pkg_set="pkgsCross.aarch64-multiplatform",
         )
     assert "--argstr" in args
     idx = args.index("pkgs-path")
@@ -112,7 +112,7 @@ def test_build_shell_file_args_with_pkgs_path() -> None:
 
 
 @pytest.mark.parametrize(
-    "pkgs_path",
+    "cross_pkg_set",
     [
         "pkgsMusl",
         "pkgsStatic",
@@ -121,8 +121,8 @@ def test_build_shell_file_args_with_pkgs_path() -> None:
         "pkgsAlt",
     ],
 )
-def test_build_shell_file_args_pkgs_path_value_preserved(pkgs_path: str) -> None:
-    """The exact pkgs_path string must be forwarded without modification."""
+def test_build_shell_file_args_pkgs_path_value_preserved(cross_pkg_set: str) -> None:
+    """The exact cross_pkg_set string must be forwarded without modification."""
     with tempfile.TemporaryDirectory() as tmpdir:
         Path(tmpdir).joinpath("nixpkgs").mkdir()
         args = build_shell_file_args(
@@ -130,14 +130,14 @@ def test_build_shell_file_args_pkgs_path_value_preserved(pkgs_path: str) -> None
             attrs_per_system={"x86_64-linux": ["hello"]},
             local_system="x86_64-linux",
             nixpkgs_config=Path(tmpdir) / "config.nix",
-            pkgs_path=pkgs_path,
+            cross_pkg_set=cross_pkg_set,
         )
     idx = args.index("pkgs-path")
-    assert args[idx + 1] == pkgs_path
+    assert args[idx + 1] == cross_pkg_set
 
 
 def test_build_shell_file_args_standard_args_still_present_with_pkgs_path() -> None:
-    """Standard argstr arguments must still be present when pkgs_path is set."""
+    """Standard argstr arguments must still be present when cross_pkg_set is set."""
     with tempfile.TemporaryDirectory() as tmpdir:
         Path(tmpdir).joinpath("nixpkgs").mkdir()
         args = build_shell_file_args(
@@ -145,7 +145,7 @@ def test_build_shell_file_args_standard_args_still_present_with_pkgs_path() -> N
             attrs_per_system={"x86_64-linux": ["hello"]},
             local_system="x86_64-linux",
             nixpkgs_config=Path(tmpdir) / "config.nix",
-            pkgs_path="pkgsAlt",
+            cross_pkg_set="pkgsAlt",
         )
     # All standard args must still be present
     for required in ("local-system", "nixpkgs-path", "nixpkgs-config-path", "attrs-path"):
