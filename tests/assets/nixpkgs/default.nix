@@ -36,14 +36,19 @@ let
       ln -s $paths $out
     '';
   };
+
+  packages = lib.genAttrs' (lib.range 1 (config.pkgCount or 1)) (
+    i:
+    lib.nameValuePair "pkg${toString i}" (mkDerivation {
+      name = "pkg${toString i}";
+      buildCommand = ''
+        cat ${./pkg1.txt} > $out
+      '';
+    }));
 in
-lib.genAttrs' (lib.range 1 (config.pkgCount or 1)) (
-  i:
-  lib.nameValuePair "pkg${toString i}" (mkDerivation {
-    name = "pkg${toString i}";
-    buildCommand = ''
-      cat ${./pkg1.txt} > $out
-    '';
-  })) // {
+packages // {
   inherit lib mkShell bashInteractive stdenv buildEnv;
+  # A mock alternative package set used by tests for the --pkgs flag
+  # (simulates pkgsCross.*, pkgsMusl, pkgsStatic, etc.)
+  pkgsAlt = packages // { inherit lib mkShell bashInteractive stdenv buildEnv; };
 }
