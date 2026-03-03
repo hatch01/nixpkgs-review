@@ -203,21 +203,8 @@ class Review:
             warn("Falling back to local evaluation")
             return False
 
-        # GHA evaluation evaluates the standard nixpkgs package set, so its results
-        # are incorrect when an alternative package set (--pkgs) is requested.
-        if self.build_config.pkgs_overlay:
-            warn(
-                "GitHub Actions evaluation does not support alternative package sets specified via --pkgs."
-            )
-            if self.review_config.eval_type == "auto":
-                warn("Falling back to local evaluation")
-                return False
-            if self.review_config.eval_type == "github":
-                warn(
-                    "Forcing `github` evaluation -> Be warned that the evaluation results will not include packages from the alternative package set"
-                )
-                return True
-
+        # GHA evaluation works fine with --pkgs because it evaluates standard nixpkgs
+        # to find changed packages, then we build those packages in the overlay.
         return True
 
     @staticmethod

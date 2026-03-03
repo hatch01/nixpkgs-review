@@ -493,21 +493,11 @@ def test_pr_only_packages_does_not_trigger_an_eval(
 
 
 @patch("nixpkgs_review.http_requests.urlopen")
-@patch("nixpkgs_review.review.Review._fetch_packages_from_github_eval")
-def test_pr_pkgs_overlay_does_not_use_github_eval(
-    mock_github_eval: MagicMock,
+def test_pr_pkgs_overlay_with_local_eval(
     mock_urlopen: MagicMock,
     helpers: Helpers,
-    capfd: pytest.CaptureFixture[Any],
 ) -> None:
-    """--pkgs should force local evaluation, not GitHub Actions eval.
-
-    GitHub Actions eval only covers the standard nixpkgs package set;
-    it doesn't know about alternative sets like pkgsCross.aarch64-multiplatform.
-    """
-    mock_github_eval.side_effect = AssertionError(
-        "GitHub eval should not be called when --pkgs is set"
-    )
+    """Test that --pkgs works with local evaluation."""
     with helpers.nixpkgs() as nixpkgs:
         base, head, merge = setup_repo(nixpkgs)
         setup_pr_mocks(
@@ -530,5 +520,3 @@ def test_pr_pkgs_overlay_does_not_use_github_eval(
             ],
         )
         helpers.assert_built(path, "pkg1")
-        # Verify that GitHub eval was never invoked
-        mock_github_eval.assert_not_called()
