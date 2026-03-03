@@ -127,6 +127,7 @@ def pr_command(args: argparse.Namespace) -> str:
                     show_logs=not args.no_logs,
                     show_pr_info=not args.no_pr_info,
                     pr_object=pr_objects.get(pr),
+                    pkgs_overlay=args.pkgs,
                 )
                 contexts.append(
                     (pr, builddir.path, review.build_pr(pr), review.head_commit)

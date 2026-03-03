@@ -118,6 +118,7 @@ class Review:
         skip_packages: set[str] | None = None,
         skip_packages_regex: list[Pattern[str]] | None = None,
         checkout: CheckoutOption = CheckoutOption.MERGE,
+        pkgs_overlay: str | None = None,
         *,
         sandbox: bool = False,
         num_eval_workers: int = 1,
@@ -141,6 +142,7 @@ class Review:
         self.package_regex = package_regexes or []
         self.skip_packages = skip_packages or set()
         self.skip_packages_regex = skip_packages_regex or []
+        self.pkgs_overlay = pkgs_overlay
         self.local_system = current_system()
         if not systems:
             msg = "Systems is empty"
@@ -189,27 +191,44 @@ class Review:
         # Its results might be incorrect when a non-default nixpkgs config is requested
         normalized_config = self.extra_nixpkgs_config.replace(" ", "")
 
-        if normalized_config == "{}":
-            return True
+        if normalized_config != "{}":
+            warn("Non-default --extra-nixpkgs-config provided.")
+            match self.eval_type:
+                # By default, fall back to local evaluation
+                case "auto":
+                    warn("Falling back to local evaluation")
+                    return False
 
-        warn("Non-default --extra-nixpkgs-config provided.")
-        match self.eval_type:
-            # By default, fall back to local evaluation
-            case "auto":
-                warn("Falling back to local evaluation")
-                return False
+                # If the user explicitly requires GitHub eval, warn them, but proceed
+                case "github":
+                    warn(
+                        "Forcing `github` evaluation -> Be warned that the evaluation results might not correspond to the provided nixpkgs config"
+                    )
+                    return True
 
-            # If the user explicitly requires GitHub eval, warn him, but proceed
-            case "github":
-                warn(
-                    "Forcing `github` evaluation -> Be warned that the evaluation results might not correspond to the provided nixpkgs config"
-                )
-                return True
+                # This should never happen
+                case _:
+                    die("Invalid eval_type")
 
-            # This should never happen
-            case _:
-                die("Invalid eval_type")
-        return None
+        # GHA evaluation evaluates the standard nixpkgs package set, so its results
+        # are incorrect when an alternative package set (--pkgs) is requested.
+        if self.pkgs_overlay:
+            warn(
+                "GitHub Actions evaluation does not support alternative package sets specified via --pkgs."
+            )
+            match self.eval_type:
+                case "auto":
+                    warn("Falling back to local evaluation")
+                    return False
+                case "github":
+                    warn(
+                        "Forcing `github` evaluation -> Be warned that the evaluation results will not include packages from the alternative package set"
+                    )
+                    return True
+                case _:
+                    die("Invalid eval_type")
+
+        return True
 
     def _process_aliases_for_systems(self, system: str) -> set[str]:
         match system:
@@ -472,6 +491,7 @@ class Review:
             self.builddir.nix_path,
             self.num_eval_workers,
             self.max_memory_size,
+            self.pkgs_overlay,
         )
         packages_per_system = {
             system: self.additional_packages | packages
@@ -488,6 +508,7 @@ class Review:
             self.nixpkgs_config,
             self.num_eval_workers,
             self.max_memory_size,
+            self.pkgs_overlay,
         )
 
     def _fetch_packages_from_github_eval(
@@ -660,6 +681,7 @@ class Review:
                 self.builddir.overlay.path,
                 self.run,
                 sandbox=self.sandbox,
+                pkgs_overlay=self.pkgs_overlay,
             )
 
         return success
@@ -879,6 +901,7 @@ def filter_packages_per_system(
     nix_path: str,
     num_eval_workers: int,
     max_memory_size: int,
+    pkgs_overlay: str | None = None,
 ) -> dict[System, set[str]]:
     needs_filtering = any(
         [specified_packages, package_regexes, skip_packages, skip_package_regexes]
@@ -908,6 +931,7 @@ def filter_packages_per_system(
             nix_path,
             num_eval_workers=num_eval_workers,
             max_memory_size=max_memory_size,
+            pkgs_overlay=pkgs_overlay,
         )
         specified_results = multi_system_eval(
             specified_eval_input,
@@ -915,6 +939,7 @@ def filter_packages_per_system(
             nix_path,
             num_eval_workers=num_eval_workers,
             max_memory_size=max_memory_size,
+            pkgs_overlay=pkgs_overlay,
         )
 
         for system in changed_packages_per_system:
@@ -1068,6 +1093,7 @@ def review_local_revision(
             extra_nixpkgs_config=args.extra_nixpkgs_config,
             num_eval_workers=args.num_eval_workers,
             max_memory_size=args.max_memory_size,
+            pkgs_overlay=args.pkgs,
         )
         review.review_commit(
             builddir.path, args.branch, commit, staged=staged, print_result=print_result
