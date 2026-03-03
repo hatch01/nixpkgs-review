@@ -329,6 +329,7 @@ class Report:
         attrs_per_system: dict[str, list[Attr]],
         package_filter: PackageFilter,
         options: ReportOptions | None = None,
+        pkgs_overlay: str | None = None,
     ) -> None:
         options = options or ReportOptions()
         self.commit = commit
@@ -338,6 +339,7 @@ class Report:
         self.attrs = attrs_per_system
         self.checkout = options.checkout
         self.package_filter = package_filter
+        self.pkgs_overlay = pkgs_overlay
 
         self.extra_nixpkgs_config = (
             options.extra_nixpkgs_config
@@ -421,11 +423,16 @@ class Report:
         msg += f"Command: `{self._generate_command_string(pr)}`\n"
         if self.commit:
             msg += f"Commit: `{self.commit}`\n"
+        if self.pkgs_overlay:
+            msg += f"Package set: `{self.pkgs_overlay}`\n"
         return msg
 
     def _generate_system_report(self, system: str, report: SystemReport) -> str:
         msg = "\n---\n"
-        msg += f"### `{system}`\n"
+        if self.pkgs_overlay:
+            msg += f"### `{system}` (built with `{self.pkgs_overlay}`)\n"
+        else:
+            msg += f"### `{system}`\n"
         msg += html_pkgs_section(
             ":fast_forward:", report.broken, "marked as broken and skipped"
         )
@@ -478,7 +485,10 @@ class Report:
 
         logs_dir = get_log_dir(root)
         for system, report in self.system_reports.items():
-            info(f"--------- Report for '{system}' ---------")
+            if self.pkgs_overlay:
+                info(f"--------- Report for '{system}' (using {self.pkgs_overlay}) ---------")
+            else:
+                info(f"--------- Report for '{system}' ---------")
             p = _package_printer(logs_dir, system)
             p(report.broken, "marked as broken and skipped", log=skipped)
             p(

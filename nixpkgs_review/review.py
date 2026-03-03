@@ -610,6 +610,7 @@ class Review:
                 show_logs=self.review_config.show_logs,
                 max_workers=min(32, os.cpu_count() or 1),
             ),
+            pkgs_overlay=self.build_config.pkgs_overlay,
         )
         report.print_console(path, pr)
         report.write(path, pr)
