@@ -1,17 +1,32 @@
-{ attr-json }:
+{ attr-json, pkgs-overlay ? "" }:
 
 with builtins;
 mapAttrs (
   system: attrs:
   let
-    pkgs = import <nixpkgs> {
+    pkgs-base = import <nixpkgs> {
       inherit system;
       config = import (getEnv "NIXPKGS_CONFIG") // {
         allowBroken = false;
       };
     };
 
-    inherit (pkgs) lib;
+    # When pkgs-overlay is set (e.g. "pkgsCross.aarch64-multiplatform"),
+    # resolve that sub-package-set so all lookups happen inside it.
+    pkgs =
+      if pkgs-overlay != "" then
+        let
+          overlay-result = pkgs-base.lib.attrByPath (pkgs-base.lib.splitString "." pkgs-overlay) null pkgs-base;
+        in
+        if overlay-result == null then
+          throw "nixpkgs-review: package set '${pkgs-overlay}' not found in nixpkgs for system '${system}'"
+        else
+          overlay-result
+      else
+        pkgs-base;
+
+    # Always use lib from the base package set — it is not platform-specific.
+    inherit (pkgs-base) lib;
 
     # nix-eval-jobs only shows derivations, so create an empty one to return
     fake =

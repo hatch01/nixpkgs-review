@@ -192,19 +192,33 @@ class Review:
 
         # GHA evaluation only evaluates nixpkgs with an empty config.
         # Its results might be incorrect when a non-default nixpkgs config is requested
-        if self.review_config.extra_nixpkgs_config.replace(" ", "") == "{}":
-            return True
+        if self.review_config.extra_nixpkgs_config.replace(" ", "") != "{}":
+            warn("Non-default --extra-nixpkgs-config provided.")
+            if self.review_config.eval_type == "github":
+                warn(
+                    "Forcing `github` evaluation -> Be warned that the evaluation results might not correspond to the provided nixpkgs config"
+                )
+                return True
+            # For "auto" mode, fall back to local evaluation
+            warn("Falling back to local evaluation")
+            return False
 
-        warn("Non-default --extra-nixpkgs-config provided.")
-        if self.review_config.eval_type == "github":
+        # GHA evaluation evaluates the standard nixpkgs package set, so its results
+        # are incorrect when an alternative package set (--pkgs) is requested.
+        if self.build_config.pkgs_overlay:
             warn(
-                "Forcing `github` evaluation -> Be warned that the evaluation results might not correspond to the provided nixpkgs config"
+                "GitHub Actions evaluation does not support alternative package sets specified via --pkgs."
             )
-            return True
+            if self.review_config.eval_type == "auto":
+                warn("Falling back to local evaluation")
+                return False
+            if self.review_config.eval_type == "github":
+                warn(
+                    "Forcing `github` evaluation -> Be warned that the evaluation results will not include packages from the alternative package set"
+                )
+                return True
 
-        # For "auto" mode, fall back to local evaluation
-        warn("Falling back to local evaluation")
-        return False
+        return True
 
     @staticmethod
     def _process_aliases_for_systems(system: str) -> set[str]:
@@ -645,6 +659,7 @@ class Review:
                 nixpkgs_overlay=self.builddir.overlay.path,
                 run=self.shell_options.run,
                 sandbox=self.shell_options.sandbox,
+                pkgs_overlay=self.build_config.pkgs_overlay,
             )
             nix_shell(report.built_packages(), shell_config)
 
@@ -1041,6 +1056,7 @@ def build_config_from_args(
         nixpkgs_config=nixpkgs_config,
         num_eval_workers=args.num_eval_workers,
         max_memory_size=args.max_memory_size,
+        pkgs_overlay=args.pkgs,
     )
 
 

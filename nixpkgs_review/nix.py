@@ -28,6 +28,7 @@ class BuildConfig:
     nixpkgs_config: Path
     num_eval_workers: int = 1
     max_memory_size: int = 4096
+    pkgs_overlay: str | None = None
 
 
 @dataclass
@@ -57,8 +58,9 @@ class Attr:
                 "verify",
                 "--no-contents",
                 "--no-trust",
-                *self.outputs.values(),
+                *[str(out) for out in self.outputs.values()],
             ],
+            stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=False,
         )
@@ -106,6 +108,7 @@ class ShellConfig:
     nixpkgs_overlay: Path
     run: str | None = None
     sandbox: bool = False
+    pkgs_overlay: str | None = None
 
 
 def nix_shell(
@@ -123,6 +126,7 @@ def nix_shell(
         attrs_per_system=attrs_per_system,
         local_system=config.local_system,
         nixpkgs_config=config.nixpkgs_config,
+        pkgs_overlay=config.pkgs_overlay,
     )
     if config.sandbox:
         args = _nix_shell_sandbox(nix_shell_bin, shell_file_args, config)
@@ -314,7 +318,9 @@ def multi_system_eval(
             "--no-instantiate",
             *_nix_common_flags(build_config.allow, build_config.nix_path),
             "--expr",
-            f"(import {eval_script} {{ attr-json = {attr_json.name}; }})",
+            f"(import {eval_script} {{ attr-json = {attr_json.name};"
+            + (f' pkgs-overlay = "{build_config.pkgs_overlay}";' if build_config.pkgs_overlay else "")
+            + " })",
             "--apply",
             "d: { inherit (d) exists broken; }",
         ]
@@ -371,13 +377,45 @@ def nix_build(
         build_config,
     )
 
-    filtered_per_system = {
-        system: [attr.name for attr in attrs if not (attr.broken or attr.blacklisted)]
-        for system, attrs in attrs_per_system.items()
-    }
+    # When using pkgs_overlay, include packages with valid drv_path even if marked broken
+    # (cross packages are often marked broken on native system but are actually buildable)
+    if build_config.pkgs_overlay:
+        filtered_per_system = {
+            system: [
+                attr.name
+                for attr in attrs
+                if not attr.blacklisted and attr.drv_path is not None
+            ]
+            for system, attrs in attrs_per_system.items()
+        }
+    else:
+        filtered_per_system = {
+            system: [attr.name for attr in attrs if not (attr.broken or attr.blacklisted)]
+            for system, attrs in attrs_per_system.items()
+        }
 
     if all(len(filtered) == 0 for filtered in filtered_per_system.values()):
+        total_evaluated = sum(len(attrs) for attrs in attrs_per_system.values())
+        overlay_info = f" (overlay: {build_config.pkgs_overlay})" if build_config.pkgs_overlay else ""
+        warn(
+            f"No packages to build after filtering{overlay_info}. "
+            f"Total packages evaluated: {total_evaluated}. "
+            "This may indicate all packages are broken/blacklisted or the package set is incompatible."
+        )
         return attrs_per_system
+
+    if build_config.pkgs_overlay:
+        for system, attrs in attrs_per_system.items():
+            for attr in attrs:
+                if not attr.broken and attr.drv_path is not None:
+                    info(
+                        f"[{system}] {attr.name} ({build_config.pkgs_overlay}): drv={attr.drv_path}"
+                        + (
+                            f" outputs={list(attr.outputs.values())}"
+                            if attr.outputs
+                            else ""
+                        )
+                    )
 
     command = [
         build_graph,
@@ -387,6 +425,7 @@ def nix_build(
         *_nix_common_flags(build_config.allow, build_config.nix_path),
         "--no-link",
         "--keep-going",
+        "--print-build-logs",
     ]
 
     if platform == "linux":
@@ -402,6 +441,7 @@ def nix_build(
         attrs_per_system=filtered_per_system,
         local_system=build_config.local_system,
         nixpkgs_config=build_config.nixpkgs_config,
+        pkgs_overlay=build_config.pkgs_overlay,
     )
     _write_review_shell_drv(
         cache_directory=cache_directory,
@@ -413,6 +453,44 @@ def nix_build(
     command += shell_file_args + shlex.split(args)
 
     sh(command)
+
+    # For overlay builds, check if outputs exist and build them directly if missing
+    # This is needed because the review-shell build may not realize all outputs
+    if build_config.pkgs_overlay:
+        missing_packages = []
+        for system, attrs in attrs_per_system.items():
+            for attr in attrs:
+                if attr.outputs and attr.drv_path:
+                    all_outputs_exist = all(
+                        output_path.exists() for output_path in attr.outputs.values()
+                    )
+                    if not all_outputs_exist:
+                        missing_packages.append((system, attr))
+
+        # Build derivations directly with all outputs using ^* syntax
+        if missing_packages:
+            for system, attr in missing_packages:
+                if attr.drv_path and attr.outputs:
+                    # Build all outputs explicitly by appending ^* to the derivation path
+                    # This ensures all outputs (out, debug, doc, etc.) are realized
+                    drv_path_with_all_outputs = f"{attr.drv_path}^*"
+                    drv_build_cmd = [
+                        build_graph,
+                        "build",
+                        drv_path_with_all_outputs,
+                        *_nix_common_flags(build_config.allow, build_config.nix_path),
+                        "--no-link",
+                        "--keep-going",
+                        "--print-build-logs",
+                    ]
+                    if platform == "linux":
+                        drv_build_cmd += ["--option", "build-use-sandbox", "relaxed"]
+
+                    try:
+                        sh(drv_build_cmd)
+                    except Exception as e:
+                        warn(f"Failed to build {attr.name}: {e}")
+
     return attrs_per_system
 
 
@@ -421,6 +499,7 @@ def build_shell_file_args(
     attrs_per_system: dict[System, list[str]],
     local_system: str,
     nixpkgs_config: Path,
+    pkgs_overlay: str | None = None,
 ) -> list[str]:
     attrs_file = cache_dir.joinpath("attrs.nix")
     with attrs_file.open("w+") as f:
@@ -432,7 +511,7 @@ def build_shell_file_args(
             f.write("  ];\n")
         f.write("}")
 
-    return [
+    result = [
         "--argstr",
         "local-system",
         local_system,
@@ -446,6 +525,9 @@ def build_shell_file_args(
         "attrs-path",
         str(attrs_file),
     ]
+    if pkgs_overlay:
+        result += ["--argstr", "pkgs-overlay", pkgs_overlay]
+    return result
 
 
 def _write_review_shell_drv(
