@@ -467,29 +467,33 @@ def nix_build(
                     if not all_outputs_exist:
                         missing_packages.append((system, attr))
 
-        # Build derivations directly with all outputs using ^* syntax
+        # Build packages directly by attribute path.
+        # We cannot use attr.drv_path with the `^*` suffix here because
+        # nix-eval-jobs is invoked with --no-instantiate: it computes the
+        # expected drv store path but never writes the .drv file to disk.
+        # Passing a non-existent .drv to `nix build` therefore fails with
+        # "don't know how to build these paths".  Instead, re-evaluate and
+        # build via the nixpkgs worktree directly, which lets nix instantiate
+        # the derivation itself on demand.
         if missing_packages:
+            nixpkgs_path = str(cache_directory / "nixpkgs")
             for system, attr in missing_packages:
-                if attr.drv_path and attr.outputs:
-                    # Build all outputs explicitly by appending ^* to the derivation path
-                    # This ensures all outputs (out, debug, doc, etc.) are realized
-                    drv_path_with_all_outputs = f"{attr.drv_path}^*"
-                    drv_build_cmd = [
-                        build_graph,
-                        "build",
-                        drv_path_with_all_outputs,
-                        *_nix_common_flags(build_config.allow, build_config.nix_path),
-                        "--no-link",
-                        "--keep-going",
-                        "--print-build-logs",
-                    ]
-                    if platform == "linux":
-                        drv_build_cmd += ["--option", "build-use-sandbox", "relaxed"]
+                attr_path = f"{build_config.pkgs_overlay}.{attr.name}"
+                drv_build_cmd = [
+                    build_graph,
+                    "build",
+                    "-f",
+                    nixpkgs_path,
+                    attr_path,
+                    *_nix_common_flags(build_config.allow, build_config.nix_path),
+                    "--no-link",
+                    "--keep-going",
+                    "--print-build-logs",
+                ]
+                if platform == "linux":
+                    drv_build_cmd += ["--option", "build-use-sandbox", "relaxed"]
 
-                    try:
-                        sh(drv_build_cmd)
-                    except Exception as e:
-                        warn(f"Failed to build {attr.name}: {e}")
+                sh(drv_build_cmd)
 
     return attrs_per_system
 
