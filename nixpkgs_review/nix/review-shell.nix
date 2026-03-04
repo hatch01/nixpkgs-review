@@ -6,6 +6,8 @@
   # Path to Nix file containing a list of attributes to build
   nixpkgs-path,
   # Path to this review's nixpkgs
+  pkgs-overlay ? "",
+  # Optional alternative package set, e.g. "pkgsMusl" or "pkgsCross.aarch64-multiplatform"
   local-pkgs ? import nixpkgs-path {
     system = local-system;
     config = import nixpkgs-config-path;
@@ -19,10 +21,21 @@ let
   extractPackagesForSystem =
     system: system-attrs:
     let
-      system-pkg = import nixpkgs-path {
+      system-pkg-base = import nixpkgs-path {
         inherit system;
         config = nixpkgs-config;
       };
+      system-pkg =
+        if pkgs-overlay != "" then
+          let
+            overlay-result = lib.attrByPath (lib.splitString "." pkgs-overlay) null system-pkg-base;
+          in
+          if overlay-result == null then
+            throw "nixpkgs-review: package set '${pkgs-overlay}' not found in nixpkgs for system '${system}'"
+          else
+            overlay-result
+        else
+          system-pkg-base;
     in
     map (attrString: lib.attrByPath (lib.splitString "." attrString) null system-pkg) system-attrs;
   attrs = lib.flatten (lib.mapAttrsToList extractPackagesForSystem (import attrs-path));

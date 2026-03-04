@@ -46,4 +46,5 @@ lib.genAttrs' (lib.range 1 (config.pkgCount or 1)) (
     '';
   })) // {
   inherit lib mkShell bashInteractive stdenv buildEnv;
+  pkgsStatic = import ./. { inherit config system; };
 }
